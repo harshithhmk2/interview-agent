@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: interview-agent
+  labels:
+    app.kubernetes.io/name: interview-agent
+    app.kubernetes.io/part-of: ai-voice-interview-agent

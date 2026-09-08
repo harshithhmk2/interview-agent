@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: interview-agent
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: ai-voice-interview-agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 10Gi

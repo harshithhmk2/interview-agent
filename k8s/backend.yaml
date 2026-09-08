@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: interview-agent
+  labels:
+    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: ai-voice-interview-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: interviewagentacr2026hmk.azurecr.io/interview-agent-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            # Secrets
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: interview-agent-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: interview-agent-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: interview-agent-secrets
+                  key: POSTGRES_DB
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: interview-agent-secrets
+                  key: GROQ_API_KEY
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: interview-agent-secrets
+                  key: JWT_SECRET_KEY
+
+            # Application & Database Configuration
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@db:5432/$(POSTGRES_DB)"
+            - name: LLM_PROVIDER
+              value: "groq"
+            - name: GROQ_BASE_URL
+              value: "https://api.groq.com/openai/v1"
+            - name: PLANNER_MODEL
+              value: "openai/gpt-oss-120b"
+            - name: EVALUATOR_MODEL
+              value: "openai/gpt-oss-120b"
+            - name: INTERVIEWER_MODEL
+              value: "openai/gpt-oss-20b"
+            - name: REPORTER_MODEL
+              value: "openai/gpt-oss-120b"
+            - name: ENABLE_TTS
+              value: "False"
+            - name: MOCK_LLM
+              value: "False"
+            - name: AUDIO_OUTPUT_DIR
+              value: "/app/audio_outputs"
+            - name: LOG_LEVEL
+              value: "INFO"
+
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1.5Gi
+
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: interview-agent
+  labels:
+    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: ai-voice-interview-agent
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
