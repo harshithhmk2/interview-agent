@@ -32,22 +32,31 @@ async def seed_data():
     print("  Seeding AI Voice Interview Agent Data   ")
     print("==========================================")
 
-    # 1. Ensure all database tables exist and role column is present
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # 1. Ensure all database tables exist and role column is present with retries
+    for attempt in range(15):
         try:
-            from sqlalchemy import text
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'candidate';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Implere Technologies';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'open';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'onsite';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS location VARCHAR(255) DEFAULT 'Bangalore';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS experience_range VARCHAR(100) DEFAULT '3 - 5 Years';"))
-            await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS salary_range VARCHAR(100) DEFAULT '₹ 15L - 18L / year';"))
-            await conn.execute(text("ALTER TABLE resumes DROP CONSTRAINT IF EXISTS resumes_candidate_email_key;"))
-            await conn.execute(text("DROP INDEX IF EXISTS resumes_candidate_email_key;"))
-        except Exception:
-            pass
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                try:
+                    from sqlalchemy import text
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'candidate';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Implere Technologies';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'open';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'onsite';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS location VARCHAR(255) DEFAULT 'Bangalore';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS experience_range VARCHAR(100) DEFAULT '3 - 5 Years';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS salary_range VARCHAR(100) DEFAULT '₹ 15L - 18L / year';"))
+                    await conn.execute(text("ALTER TABLE resumes DROP CONSTRAINT IF EXISTS resumes_candidate_email_key;"))
+                    await conn.execute(text("DROP INDEX IF EXISTS resumes_candidate_email_key;"))
+                except Exception:
+                    pass
+            break
+        except Exception as e:
+            if attempt < 14:
+                print(f"[RETRY] Waiting for database (attempt {attempt+1}/15): {e}")
+                await asyncio.sleep(2)
+            else:
+                raise e
 
     async with SessionLocal() as session:
         # Check if sample data is already seeded

@@ -24,29 +24,36 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Initializing AI Voice Interview Agent Backend...")
     
-    # 2. Async database schema validation and creation
-    try:
-        async with engine.begin() as conn:
-            # Import models to ensure they are registered on Base
-            from src.db import models
-            from sqlalchemy import text
-            await conn.run_sync(Base.metadata.create_all)
-            try:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'candidate';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Implere Technologies';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'open';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'onsite';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS location VARCHAR(255) DEFAULT 'Bangalore';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS experience_range VARCHAR(100) DEFAULT '3 - 5 Years';"))
-                await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS salary_range VARCHAR(100) DEFAULT '₹ 15L - 18L / year';"))
-                await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS questions_plan JSON;"))
-                await conn.execute(text("ALTER TABLE resumes DROP CONSTRAINT IF EXISTS resumes_candidate_email_key;"))
-                await conn.execute(text("DROP INDEX IF EXISTS resumes_candidate_email_key;"))
-            except Exception as schema_err:
-                logger.warning(f"Schema migration check note: {schema_err}")
-        logger.info("Database tables verified/created successfully.")
-    except Exception as db_err:
-        logger.critical(f"Failed to initialize database tables on startup: {db_err}", exc_info=True)
+    # 2. Async database schema validation and creation with retries
+    for attempt in range(15):
+        try:
+            async with engine.begin() as conn:
+                # Import models to ensure they are registered on Base
+                from src.db import models
+                from sqlalchemy import text
+                await conn.run_sync(Base.metadata.create_all)
+                try:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'candidate';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Implere Technologies';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'open';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'onsite';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS location VARCHAR(255) DEFAULT 'Bangalore';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS experience_range VARCHAR(100) DEFAULT '3 - 5 Years';"))
+                    await conn.execute(text("ALTER TABLE job_descriptions ADD COLUMN IF NOT EXISTS salary_range VARCHAR(100) DEFAULT '₹ 15L - 18L / year';"))
+                    await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS questions_plan JSON;"))
+                    await conn.execute(text("ALTER TABLE resumes DROP CONSTRAINT IF EXISTS resumes_candidate_email_key;"))
+                    await conn.execute(text("DROP INDEX IF EXISTS resumes_candidate_email_key;"))
+                except Exception as schema_err:
+                    logger.warning(f"Schema migration check note: {schema_err}")
+            logger.info("Database tables verified/created successfully.")
+            break
+        except Exception as db_err:
+            if attempt < 14:
+                logger.warning(f"Waiting for database connection on startup (attempt {attempt+1}/15): {db_err}")
+                import asyncio
+                await asyncio.sleep(2)
+            else:
+                logger.critical(f"Failed to initialize database tables on startup: {db_err}", exc_info=True)
 
     yield
 
